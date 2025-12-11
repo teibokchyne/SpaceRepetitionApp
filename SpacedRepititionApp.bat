@@ -1,0 +1,1 @@
+start cmd /k "cd /d D:\Records2\Coding\Projects\SpaceRepititionApp && spaced_repitition_venv\Scripts\activate.bat && python app.py"

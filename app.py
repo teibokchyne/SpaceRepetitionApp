@@ -375,6 +375,19 @@ def increment_practice_date(practice_id, days):
     return redirect('/practice')
 
 
+@app.route('/rate-practice/<int:practice_id>/<int:stars>', methods=['GET'])
+def rate_practice(practice_id, stars):
+    """Rate a practice item with 1-5 stars."""
+    if 1 <= stars <= 5:
+        conn = get_db_connection()
+        conn.execute('UPDATE spaced_repetition SET stars = ? WHERE id = ?',
+                     (stars, practice_id))
+        conn.commit()
+        conn.close()
+
+    return redirect('/practice')
+
+
 @app.route('/practice', methods=['GET', 'POST'])
 def practice():
     """Display all spaced repetition practice items."""
@@ -403,6 +416,7 @@ def practice():
     filter_topic = request.args.get('topic', '', type=str)
     filter_date = request.args.get('date', '', type=str)
     filter_type = request.args.get('filter', 'all', type=str)
+    filter_stars = request.args.get('stars', '', type=str)
 
     conn = get_db_connection()
 
@@ -415,6 +429,8 @@ def practice():
         conditions.append(f' subject = "{filter_subject}"')
     if filter_topic:
         conditions.append(f' topic = "{filter_topic}"')
+    if filter_stars:
+        conditions.append(f' stars = {filter_stars}')
 
     if filter_type == 'before' and filter_date:
         conditions.append(f' date < "{filter_date}"')
@@ -432,7 +448,7 @@ def practice():
     total_practices = conn.execute(query_count).fetchone()['count']
 
     # Get all filtered practices
-    query += ' ORDER BY date DESC'
+    query += ' ORDER BY date ASC, stars ASC'
     all_practices = conn.execute(query).fetchall()
 
     # Add dummy data if table is empty
@@ -493,6 +509,19 @@ def practice():
             # Convert answer to markdown
             answer_html = markdown.markdown(practice["answer"])
 
+            # Star rating display
+            try:
+                stars = practice["stars"] if practice["stars"] else 0
+            except (IndexError, KeyError):
+                stars = 0
+            star_html = '⭐' * stars if stars > 0 else '✩ (0 stars)'
+
+            # Star rating buttons
+            star_buttons = '<div style="display: flex; gap: 3px; flex-wrap: wrap;">'
+            for star_count in range(1, 6):
+                star_buttons += f'<a href="/rate-practice/{practice["id"]}/{star_count}" style="padding: 3px 8px; background-color: #FFD700; color: black; text-decoration: none; border-radius: 3px; font-size: 12px; cursor: pointer;">{"⭐" * star_count}</a>'
+            star_buttons += '</div>'
+
             practices_html += f'''
             <div style="background-color: #f9f9f9; border: 1px solid #ddd; border-radius: 8px; padding: 20px; margin-bottom: 20px;">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
@@ -514,6 +543,15 @@ def practice():
                     <p><strong>Answer:</strong></p>
                     <button class="answer-btn" id="answerBtn-{practice['id']}" onclick="toggleAnswer('{practice['id']}')">Show Answer</button>
                     <div id="answer-{practice['id']}" class="answer-hidden" style="background-color: white; padding: 10px; border-radius: 4px; border-left: 4px solid #4CAF50;">{answer_html}</div>
+                </div>
+                
+                <div style="margin-bottom: 20px;">
+                    <button class="stars-btn" id="starsBtn-{practice['id']}" onclick="toggleStars('{practice['id']}')">Show Importance</button>
+                    <div id="stars-{practice['id']}" class="stars-hidden" style="margin-top: 10px;">
+                        <p><strong>Importance:</strong> {star_html}</p>
+                        <p><strong>Rate:</strong></p>
+                        {star_buttons}
+                    </div>
                 </div>
                 
                 <div style="margin-top: 20px;">
@@ -651,8 +689,31 @@ def practice():
             .subject-topic-btn:hover {{
                 background-color: #0b7dda;
             }}
+            .stars-hidden {{
+                display: none;
+            }}
+            .stars-btn {{
+                padding: 8px 16px;
+                font-size: 14px;
+                cursor: pointer;
+                background-color: #FF9800;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                margin-bottom: 10px;
+            }}
+            .stars-btn:hover {{
+                background-color: #e68900;
+            }}
         </style>
         <script>
+            function toggleStars(practiceId) {{
+                const starsDiv = document.getElementById('stars-' + practiceId);
+                const btn = document.getElementById('starsBtn-' + practiceId);
+                starsDiv.classList.toggle('stars-hidden');
+                btn.textContent = starsDiv.classList.contains('stars-hidden') ? 'Show Importance' : 'Hide Importance';
+            }}
+            
             function toggleSubjectTopic(practiceId) {{
                 const subjectTopicDiv = document.getElementById('subjectTopic-' + practiceId);
                 const btn = document.getElementById('subjectTopicBtn-' + practiceId);
@@ -704,6 +765,17 @@ def practice():
             
             <label for="date" style="margin-right: 10px; font-weight: bold;">Date:</label>
             <input type="date" name="date" id="date" value="{filter_date}" style="padding: 8px; margin-right: 20px;">
+            
+            <label for="stars" style="margin-right: 10px; font-weight: bold;">Stars:</label>
+            <select name="stars" id="stars" style="padding: 8px; margin-right: 20px;">
+                <option value="">All Star Ratings</option>
+                <option value="0" {"selected" if filter_stars == "0" else ""}>No Stars (0)</option>
+                <option value="1" {"selected" if filter_stars == "1" else ""}>⭐ (1)</option>
+                <option value="2" {"selected" if filter_stars == "2" else ""}>⭐⭐ (2)</option>
+                <option value="3" {"selected" if filter_stars == "3" else ""}>⭐⭐⭐ (3)</option>
+                <option value="4" {"selected" if filter_stars == "4" else ""}>⭐⭐⭐⭐ (4)</option>
+                <option value="5" {"selected" if filter_stars == "5" else ""}>⭐⭐⭐⭐⭐ (5)</option>
+            </select>
             
             <button type="submit" style="padding: 8px 16px; background-color: #2196F3; color: white; border: none; border-radius: 4px; cursor: pointer;">Filter</button>
             <a href="/practice" style="padding: 8px 16px; background-color: #999; color: white; text-decoration: none; border-radius: 4px; display: inline-block; margin-left: 10px;">Clear Filter</a>

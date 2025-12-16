@@ -388,6 +388,125 @@ def rate_practice(practice_id, stars):
     return redirect('/practice')
 
 
+@app.route('/edit-practice/<int:practice_id>', methods=['GET', 'POST'])
+def edit_practice(practice_id):
+    """Edit a practice item."""
+    if request.method == 'POST':
+        subject = request.form.get('subject')
+        topic = request.form.get('topic')
+        question = request.form.get('question')
+        answer = request.form.get('answer')
+        if subject and topic and question and answer:
+            conn = get_db_connection()
+            conn.execute(
+                'UPDATE spaced_repetition SET subject = ?, topic = ?, question = ?, answer = ? WHERE id = ?',
+                (subject, topic, question, answer, practice_id)
+            )
+            conn.commit()
+            conn.close()
+        return redirect('/practice')
+
+    conn = get_db_connection()
+    practice = conn.execute('SELECT * FROM spaced_repetition WHERE id = ?',
+                            (practice_id,)).fetchone()
+    conn.close()
+
+    if practice is None:
+        return redirect('/practice')
+
+    return f'''
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>Edit Practice Item</title>
+        <style>
+            body {{
+                font-family: Arial, sans-serif;
+                max-width: 900px;
+                margin: 0 auto;
+                padding: 20px;
+            }}
+            input, textarea {{
+                width: 100%;
+                padding: 10px;
+                margin: 10px 0;
+                font-size: 14px;
+                box-sizing: border-box;
+            }}
+            button {{
+                padding: 10px 20px;
+                font-size: 16px;
+                cursor: pointer;
+                background-color: #4CAF50;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                margin-right: 10px;
+            }}
+            button:hover {{
+                background-color: #45a049;
+            }}
+            a {{
+                padding: 10px 20px;
+                font-size: 16px;
+                background-color: #999;
+                color: white;
+                text-decoration: none;
+                border-radius: 4px;
+            }}
+            a:hover {{
+                background-color: #777;
+            }}
+            h1 {{
+                color: #333;
+            }}
+            .form-group {{
+                margin-bottom: 15px;
+            }}
+            .form-group label {{
+                display: block;
+                font-weight: bold;
+                margin-bottom: 5px;
+            }}
+        </style>
+    </head>
+    <body>
+        <h1>Edit Practice Item</h1>
+        <form method="post">
+            <div class="form-group">
+                <label for="subject">Subject:</label>
+                <input type="text" name="subject" id="subject" value="{practice["subject"]}" required>
+            </div>
+            <div class="form-group">
+                <label for="topic">Topic:</label>
+                <input type="text" name="topic" id="topic" value="{practice["topic"]}" required>
+            </div>
+            <div class="form-group">
+                <label for="question">Question:</label>
+                <textarea name="question" id="question" required>{practice["question"]}</textarea>
+            </div>
+            <div class="form-group">
+                <label for="answer">Answer:</label>
+                <textarea name="answer" id="answer" required>{practice["answer"]}</textarea>
+            </div>
+            <button type="submit">Update Practice Item</button>
+            <a href="/practice">Cancel</a>
+        </form>
+    </body>
+    </html>
+    '''
+
+
+@app.route('/delete-practice/<int:practice_id>', methods=['GET'])
+def delete_practice(practice_id):
+    """Delete a practice item."""
+    conn = get_db_connection()
+    conn.execute('DELETE FROM spaced_repetition WHERE id = ?', (practice_id,))
+    conn.commit()
+    conn.close()
+    return redirect('/practice')
+
+
 @app.route('/practice', methods=['GET', 'POST'])
 def practice():
     """Display all spaced repetition practice items."""
@@ -536,13 +655,13 @@ def practice():
                 
                 <div style="margin-bottom: 20px;">
                     <p><strong>Question:</strong></p>
-                    <p style="background-color: white; padding: 10px; border-radius: 4px; border-left: 4px solid #2196F3;">{practice["question"]}</p>
+                    <p style="background-color: white; padding: 10px; border-radius: 4px; border-left: 4px solid #2196F3; white-space: pre-wrap; word-wrap: break-word;">{practice["question"]}</p>
                 </div>
                 
                 <div style="margin-bottom: 20px;">
                     <p><strong>Answer:</strong></p>
                     <button class="answer-btn" id="answerBtn-{practice['id']}" onclick="toggleAnswer('{practice['id']}')">Show Answer</button>
-                    <div id="answer-{practice['id']}" class="answer-hidden" style="background-color: white; padding: 10px; border-radius: 4px; border-left: 4px solid #4CAF50;">{answer_html}</div>
+                    <div id="answer-{practice['id']}" class="answer-hidden" style="background-color: white; padding: 10px; border-radius: 4px; border-left: 4px solid #4CAF50; white-space: pre-wrap; word-wrap: break-word;">{answer_html}</div>
                 </div>
                 
                 <div style="margin-bottom: 20px;">
@@ -557,6 +676,11 @@ def practice():
                 <div style="margin-top: 20px;">
                     <p><strong>Change Date:</strong></p>
                     {date_buttons}
+                </div>
+                
+                <div style="margin-top: 20px; display: flex; gap: 10px;">
+                    <a href="/edit-practice/{practice['id']}" style="padding: 10px 20px; background-color: #2196F3; color: white; text-decoration: none; border-radius: 4px; cursor: pointer;">Edit</a>
+                    <a href="/delete-practice/{practice['id']}" style="padding: 10px 20px; background-color: #f44336; color: white; text-decoration: none; border-radius: 4px; cursor: pointer;" onclick="return confirm('Are you sure you want to delete this practice item?');">Delete</a>
                 </div>
             </div>
             '''
